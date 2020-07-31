@@ -11,9 +11,6 @@ use Getopt::Long;
 my $default_refseq = "/home/adminrig/tools/GenomeAnalysisTK-2.8-1-g932cd3a/bundle_2.8_hg19/ucsc.hg19.fasta";
 my $default_samtools = "/home/adminrig/tools/samtools-1.3.1/samtools";
 my $max_samtools_depth = 500000; # overriding samtools depth default cap of 8000x depth
-my $max_clippingvariant_length = 5000;
-my $max_insertionvariant_length = 5000;
-
 
 ##
 # internal logic below
@@ -92,10 +89,6 @@ ALIGNMENT:while(<>) {
 		my $end = $pointer - 1;
 		my $insertion_seq = join("", @{$reconstructed_alignment->{cigar_readseq}}[$start..$end]);
 		# the insertion is between $reconstructed_alignment->{cigar_refpos}->[$start-1] and $reconstructed_alignment->{cigar_refpos}->[$end+1]
-		if ($reconstructed_alignment->{cigar_refpos}->[$start-1] eq "*") {
-		    warn "WARNING: unknown reference position (it is soft-clipped?): ".sprintf("\$reconstructed_alignment->{cigar_refpos}->[\$start-1]=%s; \$reconstructed_alignment->{cigar}->[\$start-1]=%s", $reconstructed_alignment->{cigar_refpos}->[$start-1], $reconstructed_alignment->{cigar}->[$start-1]);
-		    next CIGAROP;
-		}
 		my $variantid = sprintf("%s:%d:%s", $fields[2], $reconstructed_alignment->{cigar_refpos}->[$start-1], $insertion_seq);
 		if (!defined $insertionvariants{$variantid}){
 		   $insertionvariants{$variantid} = [0, 0, $fields[2], $reconstructed_alignment->{cigar_refpos}->[$start-1], $insertion_seq];
@@ -114,7 +107,7 @@ ALIGNMENT:while(<>) {
 }
 # VCF output
 print "##fileformat=VCFv4.1\n";
-print "##source=ITDseekV1.2.1\n";
+print "##source=ITDseekV1.2\n";
 print "##reference=file://$refseq\n";
 print "##INFO=<ID=DP2,Number=2,Type=Integer,Description=\"# alt-foward and alt-reverse reads\">\n";
 print "##INFO=<ID=LEN,Number=1,Type=Integer,Description=\"length of ITD\">\n";
@@ -124,31 +117,23 @@ print "##INFO=<ID=INSERTION,Number=0,Type=Flag,Description=\"ITD is detected as 
 print "##INFO=<ID=VAF,Number=1,Type=Float,Description=\"ITD allele fraction\">\n";
 print join("\t", "#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")."\n";
 # clipping mode
-VAR:foreach my $variantid (sort {$variants{$b}->[0]+$variants{$b}->[1] <=> $variants{$a}->[0]+$variants{$a}->[1]} keys %variants) {
+foreach my $variantid (sort {$variants{$b}->[0]+$variants{$b}->[1] <=> $variants{$a}->[0]+$variants{$a}->[1]} keys %variants) {
     my $seq = &faidx($variantid);
-    next VAR if length($seq) > $max_clippingvariant_length;
     my $ref = substr($seq,-1);
     my $alt = $ref.$seq;
     my $region = sprintf("%s:%d-%d", $variants{$variantid}->[2], $variants{$variantid}->[4] - 0, $variants{$variantid}->[4] + 0);
     my $region_depth = depth($region);
-    if ($region_depth <= 0) {
-	warn "WARNING: unexpected region depth $region_depth for $region, the variant is skipped (id: $variantid)";
-	next VAR;
-    }
+    die "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
     my $vaf = ($variants{$variantid}->[0] + $variants{$variantid}->[1]) / $region_depth;
     print join("\t", $variants{$variantid}->[2], $variants{$variantid}->[4], ".", $ref, $alt, $variants{$variantid}->[0] + $variants{$variantid}->[1], ".", sprintf("DP2=%d,%d;LEN=%d;SEQ=%s;CLIPPING;VAF=%0.2f", $variants{$variantid}->[0], $variants{$variantid}->[1], length($seq), $seq, $vaf))."\n";
 }
 # insertion mode
-VAR:foreach my $variantid (sort {$insertionvariants{$b}->[0]+$insertionvariants{$b}->[1] <=> $insertionvariants{$a}->[0]+$insertionvariants{$a}->[1]} keys %insertionvariants) {
-    next VAR if length($insertionvariants{$variantid}->[4]) > $max_insertionvariant_length;
+foreach my $variantid (sort {$insertionvariants{$b}->[0]+$insertionvariants{$b}->[1] <=> $insertionvariants{$a}->[0]+$insertionvariants{$a}->[1]} keys %insertionvariants) {
     my $ref = &faidx(sprintf("%s:%d-%d", @{$insertionvariants{$variantid}}[2,3,3]));
     my $alt = $ref.$insertionvariants{$variantid}->[4];
     my $region = sprintf("%s:%d-%d", $insertionvariants{$variantid}->[2], $insertionvariants{$variantid}->[3] - 0, $insertionvariants{$variantid}->[3] + 0);
     my $region_depth = depth($region);
-    if ($region_depth <= 0) {
-	warn "WARNING: unexpected region depth $region_depth for $region, the variant is skipped (id: $variantid)";
-	next VAR;
-    }
+    die "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
     my $vaf = ($insertionvariants{$variantid}->[0] + $insertionvariants{$variantid}->[1]) / $region_depth;
     print join("\t", $insertionvariants{$variantid}->[2], $insertionvariants{$variantid}->[3], ".", $ref, $alt, $insertionvariants{$variantid}->[0] + $insertionvariants{$variantid}->[1], ".", sprintf("DP2=%d,%d;LEN=%d;SEQ=%s;INSERTION;VAF=%0.2f", $insertionvariants{$variantid}->[0], $insertionvariants{$variantid}->[1], length($insertionvariants{$variantid}->[4]), $insertionvariants{$variantid}->[4], $vaf))."\n";
 }
