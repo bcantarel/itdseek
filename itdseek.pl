@@ -123,7 +123,8 @@ foreach my $variantid (sort {$variants{$b}->[0]+$variants{$b}->[1] <=> $variants
     my $alt = $ref.$seq;
     my $region = sprintf("%s:%d-%d", $variants{$variantid}->[2], $variants{$variantid}->[4] - 0, $variants{$variantid}->[4] + 0);
     my $region_depth = depth($region);
-    die "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
+    warn "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
+    next;
     my $vaf = ($variants{$variantid}->[0] + $variants{$variantid}->[1]) / $region_depth;
     print join("\t", $variants{$variantid}->[2], $variants{$variantid}->[4], ".", $ref, $alt, $variants{$variantid}->[0] + $variants{$variantid}->[1], ".", sprintf("DP2=%d,%d;LEN=%d;SEQ=%s;CLIPPING;VAF=%0.2f", $variants{$variantid}->[0], $variants{$variantid}->[1], length($seq), $seq, $vaf))."\n";
 }
@@ -133,7 +134,8 @@ foreach my $variantid (sort {$insertionvariants{$b}->[0]+$insertionvariants{$b}-
     my $alt = $ref.$insertionvariants{$variantid}->[4];
     my $region = sprintf("%s:%d-%d", $insertionvariants{$variantid}->[2], $insertionvariants{$variantid}->[3] - 0, $insertionvariants{$variantid}->[3] + 0);
     my $region_depth = depth($region);
-    die "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
+    warn "ERROR: unexpected region depth $region_depth for $region" if $region_depth <= 0;
+    next;
     my $vaf = ($insertionvariants{$variantid}->[0] + $insertionvariants{$variantid}->[1]) / $region_depth;
     print join("\t", $insertionvariants{$variantid}->[2], $insertionvariants{$variantid}->[3], ".", $ref, $alt, $insertionvariants{$variantid}->[0] + $insertionvariants{$variantid}->[1], ".", sprintf("DP2=%d,%d;LEN=%d;SEQ=%s;INSERTION;VAF=%0.2f", $insertionvariants{$variantid}->[0], $insertionvariants{$variantid}->[1], length($insertionvariants{$variantid}->[4]), $insertionvariants{$variantid}->[4], $vaf))."\n";
 }
